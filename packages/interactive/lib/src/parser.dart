@@ -7,7 +7,7 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
-import 'package:analyzer/error/error.dart';
+import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:analyzer/error/listener.dart';
 import 'package:analyzer/source/line_info.dart';
 import 'package:analyzer/src/dart/scanner/reader.dart';
@@ -114,13 +114,13 @@ T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
 }
 
 // TODO change to gather it etc
-class _LoggingErrorListener extends BooleanErrorListener {
+class _LoggingErrorListener extends BooleanDiagnosticListener {
   final log = Logger('LoggingErrorListener');
 
   @override
-  void onError(AnalysisError error) {
-    super.onError(error);
-    log.info('Error when parsing: $error');
+  void onDiagnostic(Diagnostic diagnostic) {
+    super.onDiagnostic(diagnostic);
+    log.info('Error when parsing: $diagnostic');
   }
 }
 

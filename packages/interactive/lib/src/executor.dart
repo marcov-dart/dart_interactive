@@ -42,7 +42,7 @@ class Executor {
     vm.dispose();
   }
 
-  Future<void> execute(String rawInput) async {
+  Future<void> execute(String rawInput) {
     if (rawInput.startsWith(_kExecuteShellPrefix)) {
       return _executeShell(rawInput);
     }
