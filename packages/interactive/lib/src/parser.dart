@@ -3,14 +3,13 @@
 import 'dart:io';
 
 import 'package:analyzer/dart/analysis/features.dart';
-import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:analyzer/error/listener.dart';
 import 'package:analyzer/source/line_info.dart';
-import 'package:analyzer/src/dart/scanner/reader.dart';
+import 'package:analyzer/src/dart/ast/ast.dart';
 import 'package:analyzer/src/dart/scanner/scanner.dart';
 import 'package:analyzer/src/generated/parser.dart';
 import 'package:analyzer/src/string_source.dart';
@@ -88,16 +87,18 @@ typedef ParserClosure<T extends AstNode> = T Function(
 
 // ref: https://github.com/BlackHC/dart_repl/blob/ad568604f41be31fbc8d809d5e0cfa25a6cd5601/lib/src/cell_type.dart#L18
 T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
-  final reader = CharSequenceReader(code);
-  final errorListener = _LoggingErrorListener();
+  final source = StringSource(code, '');
+  final diagnosticsListener = _LoggingDiagnosticsListener();
+  final reporter = DiagnosticReporter(diagnosticsListener, source);
   final featureSet = FeatureSet.latestLanguageVersion();
-  final scanner = Scanner(StringSource(code, ''), reader, errorListener)
+  final scanner = Scanner(code, reporter)
     ..configureFeatures(
         featureSetForOverriding: featureSet, featureSet: featureSet);
   final token = scanner.tokenize();
   // actual version via sem ver is before the first space. so, we leverage the runtime's version, ignoring override currently.
   final languageVersionViaRuntime = Platform.version.split(' ').first;
-  final parser = Parser(StringSource(code, ''), errorListener,
+
+  final parser = Parser(reporter,
       featureSet: featureSet,
       lineInfo: LineInfo.fromContent(code),
       languageVersion: LibraryLanguageVersion(
@@ -105,7 +106,7 @@ T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
 
   final result = parse(parser, token);
 
-  if (errorListener.errorReported ||
+  if (diagnosticsListener.errorReported ||
       result.endToken.next?.type != TokenType.EOF) {
     return null;
   }
@@ -114,8 +115,8 @@ T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
 }
 
 // TODO change to gather it etc
-class _LoggingErrorListener extends BooleanDiagnosticListener {
-  final log = Logger('LoggingErrorListener');
+class _LoggingDiagnosticsListener extends BooleanDiagnosticListener {
+  final log = Logger('LoggingDiagnosticsListener');
 
   @override
   void onDiagnostic(Diagnostic diagnostic) {
@@ -132,9 +133,15 @@ extension on AstNode {
 extension on CompilationUnitMember {
   String get identifier {
     final that = this;
-    if (that is NamedCompilationUnitMember) return '$runtimeType#${that.name}';
-    throw UnimplementedError(
-        'Not implemented identifier for $runtimeType yet, please make a PR');
+
+    return switch (that) {
+      ClassDeclaration() => '$runtimeType#${that.namePart}',
+      EnumDeclaration() => '$runtimeType#${that.namePart}',
+      FunctionDeclaration() => '$runtimeType#${that.name}',
+      MixinDeclaration() => '$runtimeType#${that.name}',
+      TypeAlias() => '$runtimeType#${that.name}',
+      CompilationUnitMember() => throw UnimplementedError(),
+    };
   }
 }
 
@@ -151,11 +158,13 @@ class _PotentialAccessorParser {
     return potentialAccessors.difference(fieldNames);
   }
 
-  Set<String> _parseFieldNames(ClassDeclaration value) => value.members
-      .whereType<FieldDeclaration>()
-      .expand((e) => e.fields.variables)
-      .map((e) => e.name.toString())
-      .toSet();
+  Set<String> _parseFieldNames(ClassDeclaration value) =>
+      (value.body as ClassBodyImpl)
+          .members
+          .whereType<FieldDeclaration>()
+          .expand((e) => e.fields.variables)
+          .map((e) => e.name.toString())
+          .toSet();
 }
 
 class _PotentialAccessorVisitor extends GeneralizingAstVisitor<void> {
