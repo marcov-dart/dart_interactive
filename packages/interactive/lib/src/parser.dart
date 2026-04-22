@@ -164,13 +164,11 @@ class _PotentialAccessorParser {
     return potentialAccessors.difference(fieldNames);
   }
 
-  Set<String> _parseFieldNames(ClassDeclaration value) =>
-      (value.body as ClassBodyImpl)
-          .members
-          .whereType<FieldDeclaration>()
-          .expand((e) => e.fields.variables)
-          .map((e) => e.name.toString())
-          .toSet();
+  Set<String> _parseFieldNames(ClassDeclaration value) => value.body.members
+      .whereType<FieldDeclaration>()
+      .expand((e) => e.fields.variables)
+      .map((e) => e.name.toString())
+      .toSet();
 }
 
 class _PotentialAccessorVisitor extends GeneralizingAstVisitor<void> {
