@@ -65,8 +65,7 @@ class InputParser {
       );
     }
 
-    final expression =
-        _tryParse(rawCode, (parser, token) => parser.parseExpression(token));
+    final expression = _tryParse(rawCode, parseExpression);
     if (expression != null) {
       log.info('parse return via expression');
       return WorkspaceCode.codeBlock(
@@ -79,6 +78,13 @@ class InputParser {
     return WorkspaceCode.codeBlock(
       generatedMethodCodeBlock: rawCode,
     );
+  }
+
+  Expression parseExpression(Parser parser, Token token) {
+    parser.fastaParser
+        .parseExpression(parser.fastaParser.syntheticPreviousToken(token))
+        .next!;
+    return parser.astBuilder.pop()! as Expression;
   }
 }
 
