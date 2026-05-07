@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:collection/collection.dart';
 import 'package:interactive/src/utils.dart';
 import 'package:interactive/src/vm_service_wrapper.dart';
 import 'package:interactive/src/workspace_file_tree.dart';
@@ -55,11 +54,8 @@ class WorkspaceIsolate {
 }
 
 extension on VmServiceWrapper {
-  Future<Set<String>> getIsolateIds() async => (await vmService.getVM())
-      .isolates!
-      .map((e) => e.id)
-      .whereNotNull()
-      .toSet();
+  Future<Set<String>> getIsolateIds() async =>
+      (await vmService.getVM()).isolates!.map((e) => e.id).nonNulls.toSet();
 }
 
 // ref: [Isolate.run]

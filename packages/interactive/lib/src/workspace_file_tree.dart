@@ -44,5 +44,5 @@ class WorkspaceFileTree {
 const _kDefaultPubspecYaml = '''
 name: execution_workspace
 environment:
-  sdk: ">=2.18.0 <3.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 ''';

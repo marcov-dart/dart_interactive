@@ -7,10 +7,9 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
-import 'package:analyzer/error/error.dart';
+import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:analyzer/error/listener.dart';
 import 'package:analyzer/source/line_info.dart';
-import 'package:analyzer/src/dart/scanner/reader.dart';
 import 'package:analyzer/src/dart/scanner/scanner.dart';
 import 'package:analyzer/src/generated/parser.dart';
 import 'package:analyzer/src/string_source.dart';
@@ -66,8 +65,7 @@ class InputParser {
       );
     }
 
-    final expression =
-        _tryParse(rawCode, (parser, token) => parser.parseExpression(token));
+    final expression = _tryParse(rawCode, parseExpression);
     if (expression != null) {
       log.info('parse return via expression');
       return WorkspaceCode.codeBlock(
@@ -81,6 +79,13 @@ class InputParser {
       generatedMethodCodeBlock: rawCode,
     );
   }
+
+  Expression parseExpression(Parser parser, Token token) {
+    parser.fastaParser
+        .parseExpression(parser.fastaParser.syntheticPreviousToken(token))
+        .next!;
+    return parser.astBuilder.pop()! as Expression;
+  }
 }
 
 typedef ParserClosure<T extends AstNode> = T Function(
@@ -88,16 +93,18 @@ typedef ParserClosure<T extends AstNode> = T Function(
 
 // ref: https://github.com/BlackHC/dart_repl/blob/ad568604f41be31fbc8d809d5e0cfa25a6cd5601/lib/src/cell_type.dart#L18
 T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
-  final reader = CharSequenceReader(code);
-  final errorListener = _LoggingErrorListener();
+  final source = StringSource(code, '');
+  final diagnosticsListener = _LoggingDiagnosticsListener();
+  final reporter = DiagnosticReporter(diagnosticsListener, source);
   final featureSet = FeatureSet.latestLanguageVersion();
-  final scanner = Scanner(StringSource(code, ''), reader, errorListener)
+  final scanner = Scanner(code, reporter)
     ..configureFeatures(
         featureSetForOverriding: featureSet, featureSet: featureSet);
   final token = scanner.tokenize();
   // actual version via sem ver is before the first space. so, we leverage the runtime's version, ignoring override currently.
   final languageVersionViaRuntime = Platform.version.split(' ').first;
-  final parser = Parser(StringSource(code, ''), errorListener,
+
+  final parser = Parser(reporter,
       featureSet: featureSet,
       lineInfo: LineInfo.fromContent(code),
       languageVersion: LibraryLanguageVersion(
@@ -105,7 +112,7 @@ T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
 
   final result = parse(parser, token);
 
-  if (errorListener.errorReported ||
+  if (diagnosticsListener.errorReported ||
       result.endToken.next?.type != TokenType.EOF) {
     return null;
   }
@@ -114,13 +121,13 @@ T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
 }
 
 // TODO change to gather it etc
-class _LoggingErrorListener extends BooleanErrorListener {
-  final log = Logger('LoggingErrorListener');
+class _LoggingDiagnosticsListener extends BooleanDiagnosticListener {
+  final log = Logger('LoggingDiagnosticsListener');
 
   @override
-  void onError(AnalysisError error) {
-    super.onError(error);
-    log.info('Error when parsing: $error');
+  void onDiagnostic(Diagnostic diagnostic) {
+    super.onDiagnostic(diagnostic);
+    log.info('Error when parsing: $diagnostic');
   }
 }
 
@@ -132,9 +139,15 @@ extension on AstNode {
 extension on CompilationUnitMember {
   String get identifier {
     final that = this;
-    if (that is NamedCompilationUnitMember) return '$runtimeType#${that.name}';
-    throw UnimplementedError(
-        'Not implemented identifier for $runtimeType yet, please make a PR');
+
+    return switch (that) {
+      ClassDeclaration() => '$runtimeType#${that.namePart}',
+      EnumDeclaration() => '$runtimeType#${that.namePart}',
+      FunctionDeclaration() => '$runtimeType#${that.name}',
+      MixinDeclaration() => '$runtimeType#${that.name}',
+      TypeAlias() => '$runtimeType#${that.name}',
+      CompilationUnitMember() => throw UnimplementedError(),
+    };
   }
 }
 
@@ -151,7 +164,7 @@ class _PotentialAccessorParser {
     return potentialAccessors.difference(fieldNames);
   }
 
-  Set<String> _parseFieldNames(ClassDeclaration value) => value.members
+  Set<String> _parseFieldNames(ClassDeclaration value) => value.body.members
       .whereType<FieldDeclaration>()
       .expand((e) => e.fields.variables)
       .map((e) => e.name.toString())

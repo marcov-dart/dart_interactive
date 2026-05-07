@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:collection/collection.dart';
-import 'package:interactive/src/main.dart' as lib_main;
+import 'package:interactive/interactive.dart' as lib_main;
 
 // ref: https://github.com/dart-lang/pub/issues/3291#issuecomment-1019880145
 Future<void> main(List<String> rawArgs) async {
