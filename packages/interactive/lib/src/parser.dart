@@ -97,7 +97,11 @@ T? _tryParse<T extends AstNode>(String code, ParserClosure<T> parse) {
   final diagnosticsListener = _LoggingDiagnosticsListener();
   final reporter = DiagnosticReporter(diagnosticsListener, source);
   final featureSet = FeatureSet.latestLanguageVersion();
-  final scanner = Scanner(code, reporter)
+  final scanner = Scanner(
+      inputText: code,
+      reportError: (diag) {
+        // TODO
+      })
     ..configureFeatures(
         featureSetForOverriding: featureSet, featureSet: featureSet);
   final token = scanner.tokenize();
